@@ -31,8 +31,7 @@ export const checkUser = async () => {
     });
 
     return newUser;
-  } 
-  catch (error) {
+  } catch (error) {
     console.log(error.message);
   }
 };
