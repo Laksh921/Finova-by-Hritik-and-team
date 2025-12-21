@@ -1,6 +1,7 @@
 import { getAccountWithTransactions } from '@/actions/accounts'
 import { notFound } from 'next/navigation';
 import React from 'react'
+import TransactionTable from '../_components/transaction-table';
 
 const AccountsPage = async ({params}) => {
     const accountData = await getAccountWithTransactions(params.id);
@@ -27,6 +28,11 @@ const AccountsPage = async ({params}) => {
 
 
         {/* Transaction Table */}
+        <Suspense
+        fallback={ <BarLoader className = "mt-4" width ={"100%"} color = "#9333ea" />}
+        >
+          <TransactionTable/>
+        </Suspense>
 
     </div>
   )
