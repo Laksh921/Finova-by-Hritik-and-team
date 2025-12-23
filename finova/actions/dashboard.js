@@ -1,6 +1,6 @@
 "use server";
 
-import aj from "@/lib/arcjet";
+// import aj from "@/lib/arcjet";
 import { db } from "@/lib/prisma";
 // import { request } from "@arcjet/next";
 import { auth } from "@clerk/nextjs/server";
@@ -57,13 +57,13 @@ export async function createAccount(data) {
     if (!userId) throw new Error("Unauthorized");
 
     // Get request data for ArcJet
-    const req = await request();
+    // const req = await request();
 
     // Check rate limit
-    const decision = await aj.protect(req, {
-      userId,
-      requested: 1, // Specify how many tokens to consume
-    });
+    // const decision = await aj.protect(req, {
+    //   userId,
+    //   requested: 1, // Specify how many tokens to consume
+    // });
 
     if (decision.isDenied()) {
       if (decision.reason.isRateLimit()) {
@@ -129,7 +129,8 @@ export async function createAccount(data) {
 
     revalidatePath("/dashboard");
     return { success: true, data: serializedAccount };
-  } catch (error) {
+  } 
+  catch (error) {
     throw new Error(error.message);
   }
 }

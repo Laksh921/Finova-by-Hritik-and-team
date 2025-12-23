@@ -13,18 +13,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import Link from "next/link";
-import { updateDefaultAccount } from "@/actions/account";
+// import { updateDefaultAccount } from "@/actions/account";
 import { toast } from "sonner";
 
 export function AccountCard({ account }) {
   const { name, type, balance, id, isDefault } = account;
 
-  const {
-    loading: updateDefaultLoading,
-    fn: updateDefaultFn,
-    data: updatedAccount,
-    error,
-  } = useFetch(updateDefaultAccount);
+  // const {
+  //   loading: updateDefaultLoading,
+  //   fn: updateDefaultFn,
+  //   data: updatedAccount,
+  //   error,
+  // } = useFetch(updateDefaultAccount);
 
   const handleDefaultChange = async (event) => {
     event.preventDefault(); // Prevent navigation
