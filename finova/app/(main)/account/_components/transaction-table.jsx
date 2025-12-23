@@ -170,7 +170,7 @@ export function TransactionTable({ transactions }) {
   const handleBulkDelete = async () => {
     if (
       !window.confirm(
-        `Are you sure you want to delete ${selectedIds.length} transactions?`
+        `Are you sure you want to delete ₹{selectedIds.length} transactions?`
       )
     )
       return;
@@ -377,7 +377,7 @@ export function TransactionTable({ transactions }) {
                         : "text-green-500"
                     )}
                   >
-                    {transaction.type === "EXPENSE" ? "-" : "+"}$
+                    {transaction.type === "EXPENSE" ? "-" : "+"}₹
                     {transaction.amount.toFixed(2)}
                   </TableCell>
                   <TableCell>
@@ -428,7 +428,7 @@ export function TransactionTable({ transactions }) {
                         <DropdownMenuItem
                           onClick={() =>
                             router.push(
-                              `/transaction/create?edit=${transaction.id}`
+                              `/transaction/create?edit=₹{transaction.id}`
                             )
                           }
                         >
