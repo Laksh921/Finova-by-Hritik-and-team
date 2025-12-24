@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 import { getUserAccounts } from "@/actions/dashboard";
 import { getDashboardData } from "@/actions/dashboard";
-// import { getCurrentBudget } from "@/actions/budget";
 import { AccountCard } from "./_components/account-card";
 import { CreateAccountDrawer } from "@/components/create-account-drawer";
-//import { BudgetProgress } from "./_components/budget-progress";
+import { BudgetProgress } from "./_components/budget-progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus } from "lucide-react";
+import { getCurrentBudget } from "@/actions/budget";
 // import { DashboardOverview } from "./_components/transaction-overview";
 
 export default async function DashboardPage() {
@@ -26,10 +26,10 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Budget Progress */}
-      {/* <BudgetProgress
+      <BudgetProgress
         initialBudget={budgetData?.budget}
         currentExpenses={budgetData?.currentExpenses || 0}
-      /> */}
+      />
 
       {/* Dashboard Overview */}
       {/* <DashboardOverview
