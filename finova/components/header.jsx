@@ -10,12 +10,12 @@ const Header = async() => {
 
   return (
     <div className="fixed top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b">
-       <nav className="container mx-auto px-4 py-4 flex items-center justify-between">
+       <nav className="container mx-auto px-6 py-1 flex items-center justify-between">
         <Link href = '/'>
             <Image
-            src = {"/logo.png"}
+            src = {"/logo1.png"}
             alt = "wlth logo"
-            height = {350} width={350}
+            height = {350} width={200}
             className="h-24 w-auto object-contain"    
             />
         </Link>
