@@ -7,7 +7,7 @@ import { BudgetProgress } from "./_components/budget-progress";
 import { Card, CardContent } from "@/components/ui/card";
 import { Plus } from "lucide-react";
 import { getCurrentBudget } from "@/actions/budget";
-// import { DashboardOverview } from "./_components/transaction-overview";
+import { DashboardOverview } from "./_components/transaction-overview";
 
 export default async function DashboardPage() {
   const [accounts, transactions] = await Promise.all([
@@ -32,10 +32,10 @@ export default async function DashboardPage() {
       />
 
       {/* Dashboard Overview */}
-      {/* <DashboardOverview
+      <DashboardOverview
         accounts={accounts}
         transactions={transactions || []}
-      /> */}
+      />
 
       {/* Accounts Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
