@@ -52,6 +52,7 @@ const HeroSection = () => {
             <div ref={imageRef} className="hero-image">
                 <Image 
                     src="/banner.jpeg" 
+                    alt="AI Image"
                     width={1280} 
                     height={720}
                     className="rounded-lg shadow-2xl border mx-auto"
