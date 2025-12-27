@@ -170,7 +170,7 @@ export function TransactionTable({ transactions }) {
   const handleBulkDelete = async () => {
     if (
       !window.confirm(
-        `Are you sure you want to delete ₹{selectedIds.length} transactions?`
+        `Are you sure you want to delete ${selectedIds.length} transactions?`
       )
     )
       return;
@@ -223,7 +223,7 @@ export function TransactionTable({ transactions }) {
               setCurrentPage(1);
             }}
           >
-            <SelectTrigger className="w-32.5">
+            <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
@@ -239,7 +239,7 @@ export function TransactionTable({ transactions }) {
               setCurrentPage(1);
             }}
           >
-            <SelectTrigger className="w-32.5">
+            <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="All Transactions" />
             </SelectTrigger>
             <SelectContent>
@@ -280,7 +280,7 @@ export function TransactionTable({ transactions }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12.5">
+              <TableHead className="w-[50px]">
                 <Checkbox
                   checked={
                     selectedIds.length === paginatedTransactions.length &&
@@ -333,7 +333,7 @@ export function TransactionTable({ transactions }) {
                 </div>
               </TableHead>
               <TableHead>Recurring</TableHead>
-              <TableHead className="w-12.5" />
+              <TableHead className="w-[50px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -377,7 +377,7 @@ export function TransactionTable({ transactions }) {
                         : "text-green-500"
                     )}
                   >
-                    {transaction.type === "EXPENSE" ? "-" : "+"}₹
+                    {transaction.type === "EXPENSE" ? "-" : "+"}$
                     {transaction.amount.toFixed(2)}
                   </TableCell>
                   <TableCell>
@@ -428,7 +428,7 @@ export function TransactionTable({ transactions }) {
                         <DropdownMenuItem
                           onClick={() =>
                             router.push(
-                              `/transaction/create?edit=₹{transaction.id}`
+                              `/transaction/create?edit=${transaction.id}`
                             )
                           }
                         >

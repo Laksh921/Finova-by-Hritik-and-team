@@ -25,7 +25,7 @@ export async function getAccountWithTransactions(accountId) {
 
   if (!user) throw new Error("User not found");
 
-  const account = await db.account.findUnique({
+  const account = await db.account.findFirst({
     where: {
       id: accountId,
       userId: user.id,
