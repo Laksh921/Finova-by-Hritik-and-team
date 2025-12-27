@@ -140,7 +140,7 @@ export function AddTransactionForm({
           onValueChange={(value) => setValue("type", value)}
           defaultValue={type}
         >
-          <SelectTrigger>
+          <SelectTrigger className="w-full ">
             <SelectValue placeholder="Select type" />
           </SelectTrigger>
           <SelectContent>
@@ -149,7 +149,7 @@ export function AddTransactionForm({
           </SelectContent>
         </Select>
         {errors.type && (
-          <p className="text-sm text-red-500">{errors.type.message}</p>
+          <p className="text-sm text-red-500 ">{errors.type.message}</p>
         )}
       </div>
 
@@ -174,7 +174,7 @@ export function AddTransactionForm({
             onValueChange={(value) => setValue("accountId", value)}
             defaultValue={getValues("accountId")}
           >
-            <SelectTrigger>
+            <SelectTrigger className="w-full ">
               <SelectValue placeholder="Select account" />
             </SelectTrigger>
             <SelectContent>
@@ -206,7 +206,7 @@ export function AddTransactionForm({
           onValueChange={(value) => setValue("category", value)}
           defaultValue={getValues("category")}
         >
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
@@ -305,16 +305,16 @@ export function AddTransactionForm({
       )}
 
       {/* Actions */}
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4 w-full">
         <Button
           type="button"
           variant="outline"
-          className="w-full"
+          className="w-full md:flex-1 "
           onClick={() => router.back()}
         >
           Cancel
         </Button>
-        <Button type="submit" className="w-full" disabled={transactionLoading}>
+        <Button type="submit" className="w-full md:flex-1" disabled={transactionLoading}>
           {transactionLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
