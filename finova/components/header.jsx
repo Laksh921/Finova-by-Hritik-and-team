@@ -10,13 +10,13 @@ const Header = async() => {
 
   return (
     <div className="fixed top-0 w-full bg-white/80 backdrop-blur-md z-50 border-b">
-       <nav className="container mx-auto px-3 py-3 flex items-center justify-between">
+       <nav className="container mx-auto px-6 flex items-center justify-between">
         <Link href = '/'>
             <Image
             src = {"/logo1.png"}
             alt = "Finova logo"
             height = {350} width={200}
-            className="h-24 w-auto object-contain"    
+            className="h-16 w-auto object-contain"    
             />
         </Link>
     <div className="flex items-center space-x-4"> 
