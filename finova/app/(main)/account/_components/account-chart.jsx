@@ -46,7 +46,9 @@ export function AccountChart({ transactions }) {
 
     // Group transactions by date
     const grouped = filtered.reduce((acc, transaction) => {
-      const date = format(new Date(transaction.date), "MMM dd");
+      const date = new Date(transaction.date).toISOString().slice(0, 10);
+
+      // const date = format(new Date(transaction.date), "MMM dd");
       if (!acc[date]) {
         acc[date] = { date, income: 0, expense: 0 };
       }
@@ -121,7 +123,9 @@ export function AccountChart({ transactions }) {
             </p>
           </div>
         </div>
-        <div className="h-25">
+        {/* <div className="h-25"> */}
+        <div className="h-[320px]">
+
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={filteredData}

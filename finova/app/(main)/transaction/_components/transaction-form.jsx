@@ -109,6 +109,22 @@ export function AddTransactionForm({
   };
 
   useEffect(() => {
+  if (!editId || !initialData) return;
+
+  reset({
+    type: initialData.type,
+    amount: initialData.amount.toString(),
+    description: initialData.description,
+    accountId: initialData.accountId,
+    category: initialData.category,
+    date: new Date(initialData.date),
+    isRecurring: initialData.isRecurring,
+    recurringInterval: initialData.recurringInterval || undefined,
+  });
+}, [editId, initialData, reset]);
+
+
+  useEffect(() => {
     if (transactionResult?.success && !transactionLoading) {
       toast.success(
         editMode
@@ -136,10 +152,16 @@ export function AddTransactionForm({
       {/* Type */}
       <div className="space-y-2">
         <label className="text-sm font-medium">Type</label>
-        <Select
+        {/* <Select
           onValueChange={(value) => setValue("type", value)}
           defaultValue={type}
+        > */}
+
+        <Select
+          value={type}
+          onValueChange={(value) => setValue("type", value)}
         >
+
           <SelectTrigger className="w-full ">
             <SelectValue placeholder="Select type" />
           </SelectTrigger>
@@ -170,10 +192,16 @@ export function AddTransactionForm({
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Account</label>
-          <Select
+          {/* <Select
             onValueChange={(value) => setValue("accountId", value)}
             defaultValue={getValues("accountId")}
+          > */}
+
+          <Select
+            value={watch("accountId")}
+            onValueChange={(value) => setValue("accountId", value)}
           >
+
             <SelectTrigger className="w-full ">
               <SelectValue placeholder="Select account" />
             </SelectTrigger>
@@ -202,10 +230,15 @@ export function AddTransactionForm({
       {/* Category */}
       <div className="space-y-2">
         <label className="text-sm font-medium">Category</label>
-        <Select
+        {/* <Select
           onValueChange={(value) => setValue("category", value)}
           defaultValue={getValues("category")}
+        > */}
+        <Select
+          value={watch("category")}
+          onValueChange={(value) => setValue("category", value)}
         >
+
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
@@ -282,10 +315,15 @@ export function AddTransactionForm({
       {isRecurring && (
         <div className="space-y-2">
           <label className="text-sm font-medium">Recurring Interval</label>
-          <Select
+          {/* <Select
             onValueChange={(value) => setValue("recurringInterval", value)}
             defaultValue={getValues("recurringInterval")}
+          > */}
+          <Select
+            value={watch("recurringInterval")}
+            onValueChange={(value) => setValue("recurringInterval", value)}
           >
+
             <SelectTrigger>
               <SelectValue placeholder="Select interval" />
             </SelectTrigger>
