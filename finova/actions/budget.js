@@ -1,29 +1,30 @@
 "use server";
 
-import { db } from "@/lib/prisma";
+import { supabase } from "../lib/supabase";
 import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 
 export async function getCurrentBudget(accountId) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw new Error("Unauthorized");
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) throw new Error("Unauthorized");
 
-    const user = await db.user.findUnique({
-      where: { clerkUserId: userId },
-    });
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerkUserId", clerkUserId)
+      .single();
 
     if (!user) {
       throw new Error("User not found");
     }
 
-    const budget = await db.budget.findFirst({
-      where: {
-        userId: user.id,
-      },
-    });
+    const { data: budget } = await supabase
+      .from("budgets")
+      .select("*")
+      .eq("userId", user.id)
+      .single();
 
-    // Get current month's expenses
     const currentDate = new Date();
     const startOfMonth = new Date(
       currentDate.getFullYear(),
@@ -36,26 +37,22 @@ export async function getCurrentBudget(accountId) {
       0
     );
 
-    const expenses = await db.transaction.aggregate({
-      where: {
-        userId: user.id,
-        type: "EXPENSE",
-        date: {
-          gte: startOfMonth,
-          lte: endOfMonth,
-        },
-        accountId,
-      },
-      _sum: {
-        amount: true,
-      },
-    });
+    const { data: expenses } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("userId", user.id)
+      .eq("type", "EXPENSE")
+      .eq("accountId", accountId)
+      .gte("date", startOfMonth.toISOString())
+      .lte("date", endOfMonth.toISOString());
+
+    const totalExpenses = expenses
+      ? expenses.reduce((sum, t) => sum + t.amount, 0)
+      : 0;
 
     return {
-      budget: budget ? { ...budget, amount: budget.amount.toNumber() } : null,
-      currentExpenses: expenses._sum.amount
-        ? expenses._sum.amount.toNumber()
-        : 0,
+      budget: budget || null,
+      currentExpenses: totalExpenses,
     };
   } catch (error) {
     console.error("Error fetching budget:", error);
@@ -65,33 +62,50 @@ export async function getCurrentBudget(accountId) {
 
 export async function updateBudget(amount) {
   try {
-    const { userId } = await auth();
-    if (!userId) throw new Error("Unauthorized");
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) throw new Error("Unauthorized");
 
-    const user = await db.user.findUnique({
-      where: { clerkUserId: userId },
-    });
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerkUserId", clerkUserId)
+      .single();
 
     if (!user) throw new Error("User not found");
 
-    // Update or create budget
-    const budget = await db.budget.upsert({
-      where: {
-        userId: user.id,
-      },
-      update: {
-        amount,
-      },
-      create: {
-        userId: user.id,
-        amount,
-      },
-    });
+    const { data: existingBudget } = await supabase
+      .from("budgets")
+      .select("id")
+      .eq("userId", user.id)
+      .single();
+
+    let budget;
+
+    if (existingBudget) {
+      const { data } = await supabase
+        .from("budgets")
+        .update({ amount })
+        .eq("userId", user.id)
+        .select()
+        .single();
+      budget = data;
+    } else {
+      const { data } = await supabase
+        .from("budgets")
+        .insert({
+          userId: user.id,
+          amount,
+        })
+        .select()
+        .single();
+      budget = data;
+    }
 
     revalidatePath("/dashboard");
+
     return {
       success: true,
-      data: { ...budget, amount: budget.amount.toNumber() },
+      data: budget,
     };
   } catch (error) {
     console.error("Error updating budget:", error);
