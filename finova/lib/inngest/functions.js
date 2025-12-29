@@ -1,184 +1,126 @@
 import { inngest } from "./client";
-import { db } from "@/lib/prisma";
+import { supabaseServer } from "@/lib/supabase-server";
 import EmailTemplate from "@/emails/template";
 import { sendEmail } from "@/actions/send-email";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// 1. Recurring Transaction Processing with Throttling
+/* ---------------------------------------------
+   1. Process Recurring Transactions
+--------------------------------------------- */
+
 export const processRecurringTransaction = inngest.createFunction(
   {
     id: "process-recurring-transaction",
     name: "Process Recurring Transaction",
     throttle: {
-      limit: 10, // Process 10 transactions
-      period: "1m", // per minute
-      key: "event.data.userId", // Throttle per user
+      limit: 10,
+      period: "1m",
+      key: "event.data.userId",
     },
   },
   { event: "transaction.recurring.process" },
   async ({ event, step }) => {
-    // Validate event data
     if (!event?.data?.transactionId || !event?.data?.userId) {
-      console.error("Invalid event data:", event);
-      return { error: "Missing required event data" };
+      return { error: "Invalid event data" };
     }
 
     await step.run("process-transaction", async () => {
-      const transaction = await db.transaction.findUnique({
-        where: {
-          id: event.data.transactionId,
-          userId: event.data.userId,
-        },
-        include: {
-          account: true,
-        },
-      });
+      const { data: transaction } = await supabaseServer
+        .from("transactions")
+        .select("*, account:accounts(*)")
+        .eq("id", event.data.transactionId)
+        .eq("userId", event.data.userId)
+        .single();
 
       if (!transaction || !isTransactionDue(transaction)) return;
 
-      // Create new transaction and update account balance in a transaction
-      await db.$transaction(async (tx) => {
-        // Create new transaction
-        await tx.transaction.create({
-          data: {
-            type: transaction.type,
-            amount: transaction.amount,
-            description: `₹{transaction.description} (Recurring)`,
-            date: new Date(),
-            category: transaction.category,
-            userId: transaction.userId,
-            accountId: transaction.accountId,
-            isRecurring: false,
-          },
-        });
+      const amount =
+        transaction.type === "EXPENSE"
+          ? -Number(transaction.amount)
+          : Number(transaction.amount);
 
-        // Update account balance
-        const balanceChange =
-          transaction.type === "EXPENSE"
-            ? -transaction.amount.toNumber()
-            : transaction.amount.toNumber();
-
-        await tx.account.update({
-          where: { id: transaction.accountId },
-          data: { balance: { increment: balanceChange } },
-        });
-
-        // Update last processed date and next recurring date
-        await tx.transaction.update({
-          where: { id: transaction.id },
-          data: {
-            lastProcessed: new Date(),
-            nextRecurringDate: calculateNextRecurringDate(
-              new Date(),
-              transaction.recurringInterval
-            ),
-          },
-        });
+      await supabaseServer.from("transactions").insert({
+        type: transaction.type,
+        amount: transaction.amount,
+        description: `${transaction.description} (Recurring)`,
+        date: new Date(),
+        category: transaction.category,
+        userId: transaction.userId,
+        accountId: transaction.accountId,
+        isRecurring: false,
       });
+
+      await supabaseServer
+        .from("accounts")
+        .update({ balance: transaction.account.balance + amount })
+        .eq("id", transaction.accountId);
+
+      await supabaseServer
+        .from("transactions")
+        .update({
+          lastProcessed: new Date(),
+          nextRecurringDate: calculateNextRecurringDate(
+            new Date(),
+            transaction.recurringInterval
+          ),
+        })
+        .eq("id", transaction.id);
     });
   }
 );
 
-// Trigger recurring transactions with batching
+/* ---------------------------------------------
+   2. Trigger Recurring Transactions (Cron)
+--------------------------------------------- */
+
 export const triggerRecurringTransactions = inngest.createFunction(
   {
-    id: "trigger-recurring-transactions", // Unique ID,
+    id: "trigger-recurring-transactions",
     name: "Trigger Recurring Transactions",
   },
-  { cron: "0 0 * * *" }, // Daily at midnight
+  { cron: "0 0 * * *" },
   async ({ step }) => {
-    const recurringTransactions = await step.run(
+    const { data: recurringTransactions } = await step.run(
       "fetch-recurring-transactions",
-      async () => {
-        return await db.transaction.findMany({
-          where: {
-            isRecurring: true,
-            status: "COMPLETED",
-            OR: [
-              { lastProcessed: null },
-              {
-                nextRecurringDate: {
-                  lte: new Date(),
-                },
-              },
-            ],
-          },
-        });
-      }
+      async () =>
+        await supabaseServer
+          .from("transactions")
+          .select("id, userId")
+          .eq("isRecurring", true)
+          .eq("status", "COMPLETED")
+          .or("lastProcessed.is.null,nextRecurringDate.lte.now()")
     );
 
-    // Send event for each recurring transaction in batches
-    if (recurringTransactions.length > 0) {
-      const events = recurringTransactions.map((transaction) => ({
-        name: "transaction.recurring.process",
-        data: {
-          transactionId: transaction.id,
-          userId: transaction.userId,
-        },
-      }));
+    if (!recurringTransactions?.length) return { triggered: 0 };
 
-      // Send events directly using inngest.send()
-      await inngest.send(events);
-    }
+    await inngest.send(
+      recurringTransactions.map((t) => ({
+        name: "transaction.recurring.process",
+        data: { transactionId: t.id, userId: t.userId },
+      }))
+    );
 
     return { triggered: recurringTransactions.length };
   }
 );
 
-// 2. Monthly Report Generation
-async function generateFinancialInsights(stats, month) {
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-  const prompt = `
-    Analyze this financial data and provide 3 concise, actionable insights.
-    Focus on spending patterns and practical advice.
-    Keep it friendly and conversational.
-
-    Financial Data for ₹{month}:
-    - Total Income: ₹₹{stats.totalIncome}
-    - Total Expenses: ₹₹{stats.totalExpenses}
-    - Net Income: ₹₹{stats.totalIncome - stats.totalExpenses}
-    - Expense Categories: ${Object.entries(stats.byCategory)
-      .map(([category, amount]) => `₹{category}: ₹₹{amount}`)
-      .join(", ")}
-
-    Format the response as a JSON array of strings, like this:
-    ["insight 1", "insight 2", "insight 3"]
-  `;
-
-  try {
-    const result = await model.generateContent(prompt);
-    const response = result.response;
-    const text = response.text();
-    const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-
-    return JSON.parse(cleanedText);
-  } catch (error) {
-    console.error("Error generating insights:", error);
-    return [
-      "Your highest expense category this month might need attention.",
-      "Consider setting up a budget for better financial management.",
-      "Track your recurring expenses to identify potential savings.",
-    ];
-  }
-}
+/* ---------------------------------------------
+   3. Monthly Reports
+--------------------------------------------- */
 
 export const generateMonthlyReports = inngest.createFunction(
   {
     id: "generate-monthly-reports",
     name: "Generate Monthly Reports",
   },
-  { cron: "0 0 1 * *" }, // First day of each month
+  { cron: "0 0 1 * *" },
   async ({ step }) => {
-    const users = await step.run("fetch-users", async () => {
-      return await db.user.findMany({
-        include: { accounts: true },
-      });
-    });
+    const { data: users } = await step.run("fetch-users", async () =>
+      supabaseServer.from("users").select("*")
+    );
 
-    for (const user of users) {
-      await step.run(`generate-report-₹{user.id}`, async () => {
+    for (const user of users ?? []) {
+      await step.run(`report-${user.id}`, async () => {
         const lastMonth = new Date();
         lastMonth.setMonth(lastMonth.getMonth() - 1);
 
@@ -187,164 +129,125 @@ export const generateMonthlyReports = inngest.createFunction(
           month: "long",
         });
 
-        // Generate AI insights
         const insights = await generateFinancialInsights(stats, monthName);
 
         await sendEmail({
           to: user.email,
-          subject: `Your Monthly Financial Report - ₹{monthName}`,
+          subject: `Your Monthly Financial Report - ${monthName}`,
           react: EmailTemplate({
             userName: user.name,
             type: "monthly-report",
-            data: {
-              stats,
-              month: monthName,
-              insights,
-            },
+            data: { stats, month: monthName, insights },
           }),
         });
       });
     }
 
-    return { processed: users.length };
+    return { processed: users?.length ?? 0 };
   }
 );
 
-// 3. Budget Alerts with Event Batching
+/* ---------------------------------------------
+   4. Budget Alerts
+--------------------------------------------- */
+
 export const checkBudgetAlerts = inngest.createFunction(
   { name: "Check Budget Alerts" },
-  { cron: "0 */6 * * *" }, // Every 6 hours
+  { cron: "0 */6 * * *" },
   async ({ step }) => {
-    const budgets = await step.run("fetch-budgets", async () => {
-      return await db.budget.findMany({
-        include: {
-          user: {
-            include: {
-              accounts: {
-                where: {
-                  isDefault: true,
-                },
-              },
-            },
-          },
-        },
-      });
-    });
+    const { data: budgets } = await step.run("fetch-budgets", async () =>
+      supabaseServer
+        .from("budgets")
+        .select("*, user:users(*, accounts:accounts(*))")
+    );
 
-    for (const budget of budgets) {
-      const defaultAccount = budget.user.accounts[0];
-      if (!defaultAccount) continue; // Skip if no default account
+    for (const budget of budgets ?? []) {
+      const defaultAccount = budget.user.accounts.find((a) => a.isDefault);
+      if (!defaultAccount) continue;
 
-      await step.run(`check-budget-₹{budget.id}`, async () => {
+      await step.run(`budget-${budget.id}`, async () => {
         const startDate = new Date();
-        startDate.setDate(1); // Start of current month
+        startDate.setDate(1);
 
-        // Calculate total expenses for the default account only
-        const expenses = await db.transaction.aggregate({
-          where: {
-            userId: budget.userId,
-            accountId: defaultAccount.id, // Only consider default account
-            type: "EXPENSE",
-            date: {
-              gte: startDate,
-            },
-          },
-          _sum: {
-            amount: true,
-          },
-        });
+        const { data: expenses } = await supabaseServer
+          .from("transactions")
+          .select("amount")
+          .eq("userId", budget.userId)
+          .eq("accountId", defaultAccount.id)
+          .eq("type", "EXPENSE")
+          .gte("date", startDate);
 
-        const totalExpenses = expenses._sum.amount?.toNumber() || 0;
-        const budgetAmount = budget.amount;
-        const percentageUsed = (totalExpenses / budgetAmount) * 100;
+        const totalExpenses =
+          expenses?.reduce((s, e) => s + Number(e.amount), 0) ?? 0;
 
-        // Check if we should send an alert
-        if (
-          percentageUsed >= 80 && // Default threshold of 80%
-          (!budget.lastAlertSent ||
-            isNewMonth(new Date(budget.lastAlertSent), new Date()))
-        ) {
+        const percentageUsed = (totalExpenses / budget.amount) * 100;
+
+        if (percentageUsed >= 80 && isNewMonth(budget.lastAlertSent, new Date())) {
           await sendEmail({
             to: budget.user.email,
-            subject: `Budget Alert for ₹{defaultAccount.name}`,
+            subject: `Budget Alert for ${defaultAccount.name}`,
             react: EmailTemplate({
               userName: budget.user.name,
               type: "budget-alert",
               data: {
                 percentageUsed,
-                budgetAmount: parseInt(budgetAmount).toFixed(1),
-                totalExpenses: parseInt(totalExpenses).toFixed(1),
+                budgetAmount: budget.amount,
+                totalExpenses,
                 accountName: defaultAccount.name,
               },
             }),
           });
 
-          // Update last alert sent
-          await db.budget.update({
-            where: { id: budget.id },
-            data: { lastAlertSent: new Date() },
-          });
+          await supabaseServer
+            .from("budgets")
+            .update({ lastAlertSent: new Date() })
+            .eq("id", budget.id);
         }
       });
     }
   }
 );
 
-function isNewMonth(lastAlertDate, currentDate) {
-  return (
-    lastAlertDate.getMonth() !== currentDate.getMonth() ||
-    lastAlertDate.getFullYear() !== currentDate.getFullYear()
-  );
-}
+/* ---------------------------------------------
+   Helpers
+--------------------------------------------- */
 
-// Utility functions
 function isTransactionDue(transaction) {
-  // If no lastProcessed date, transaction is due
   if (!transaction.lastProcessed) return true;
-
-  const today = new Date();
-  const nextDue = new Date(transaction.nextRecurringDate);
-
-  // Compare with nextDue date
-  return nextDue <= today;
+  return new Date(transaction.nextRecurringDate) <= new Date();
 }
 
 function calculateNextRecurringDate(date, interval) {
   const next = new Date(date);
-  switch (interval) {
-    case "DAILY":
-      next.setDate(next.getDate() + 1);
-      break;
-    case "WEEKLY":
-      next.setDate(next.getDate() + 7);
-      break;
-    case "MONTHLY":
-      next.setMonth(next.getMonth() + 1);
-      break;
-    case "YEARLY":
-      next.setFullYear(next.getFullYear() + 1);
-      break;
-  }
+  if (interval === "DAILY") next.setDate(next.getDate() + 1);
+  if (interval === "WEEKLY") next.setDate(next.getDate() + 7);
+  if (interval === "MONTHLY") next.setMonth(next.getMonth() + 1);
+  if (interval === "YEARLY") next.setFullYear(next.getFullYear() + 1);
   return next;
 }
 
+function isNewMonth(last, now) {
+  if (!last) return true;
+  return (
+    new Date(last).getMonth() !== now.getMonth() ||
+    new Date(last).getFullYear() !== now.getFullYear()
+  );
+}
+
 async function getMonthlyStats(userId, month) {
-  const startDate = new Date(month.getFullYear(), month.getMonth(), 1);
-  const endDate = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+  const start = new Date(month.getFullYear(), month.getMonth(), 1);
+  const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
 
-  const transactions = await db.transaction.findMany({
-    where: {
-      userId,
-      date: {
-        gte: startDate,
-        lte: endDate,
-      },
-    },
-  });
+  const { data: transactions } = await supabaseServer
+    .from("transactions")
+    .select("*")
+    .eq("userId", userId)
+    .gte("date", start)
+    .lte("date", end);
 
-  return transactions.reduce(
+  return (transactions ?? []).reduce(
     (stats, t) => {
-      const amount = t.amount.toNumber();
+      const amount = Number(t.amount);
       if (t.type === "EXPENSE") {
         stats.totalExpenses += amount;
         stats.byCategory[t.category] =
@@ -354,11 +257,23 @@ async function getMonthlyStats(userId, month) {
       }
       return stats;
     },
-    {
-      totalExpenses: 0,
-      totalIncome: 0,
-      byCategory: {},
-      transactionCount: transactions.length,
-    }
+    { totalExpenses: 0, totalIncome: 0, byCategory: {} }
   );
+}
+
+async function generateFinancialInsights(stats, month) {
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const prompt = `Analyze finances for ${month}: ${JSON.stringify(stats)}`;
+    const res = await model.generateContent(prompt);
+    return JSON.parse(res.response.text().replace(/```/g, ""));
+  } catch {
+    return [
+      "Track expenses closely this month.",
+      "Consider optimizing your largest expense category.",
+      "Try setting a savings goal for next month.",
+    ];
+  }
 }
