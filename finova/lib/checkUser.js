@@ -8,40 +8,54 @@ export const checkUser = async () => {
   const clerkUserId = user.id;
   const email = user.emailAddresses[0].emailAddress.toLowerCase().trim();
   const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
+  const imageUrl = user.imageUrl;
 
-  // 1️⃣ Try to find user by clerkUserId
-  const { data: existingUser, error: fetchError } =
-    await supabaseServer
+  // 1️⃣ Try finding user by clerkUserId
+  const { data: byClerkId } = await supabaseServer
+    .from("users")
+    .select("*")
+    .eq("clerkUserId", clerkUserId)
+    .maybeSingle();
+
+  if (byClerkId) return byClerkId;
+
+  // 2️⃣ Try finding user by email
+  const { data: byEmail } = await supabaseServer
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (byEmail) {
+    // 🔁 Attach clerkUserId to existing email record
+    const { data: updatedUser, error } = await supabaseServer
       .from("users")
-      .select("*")
-      .eq("clerkUserId", clerkUserId)
-      .single();
-
-  if (existingUser) {
-    return existingUser;
-  }
-
-  if (fetchError && fetchError.code !== "PGRST116") {
-    throw fetchError;
-  }
-
-  // 2️⃣ Insert ONLY if user does not exist
-  const { data: newUser, error: insertError } =
-    await supabaseServer
-      .from("users")
-      .insert({
+      .update({
         clerkUserId,
-        email,
         name,
-        imageUrl: user.imageUrl,
+        imageUrl,
       })
+      .eq("id", byEmail.id)
       .select()
       .single();
 
-  if (insertError) {
-    console.error("checkUser insert error:", insertError);
-    throw insertError;
+    if (error) throw error;
+    return updatedUser;
   }
+
+  // 3️⃣ Truly new user → insert
+  const { data: newUser, error } = await supabaseServer
+    .from("users")
+    .insert({
+      clerkUserId,
+      email,
+      name,
+      imageUrl,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
 
   return newUser;
 };
