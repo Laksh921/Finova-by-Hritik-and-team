@@ -1,5 +1,5 @@
 import { currentUser } from "@clerk/nextjs/server";
-import { db } from "./prisma";
+import { supabaseServer } from "@/lib/supabase-server";
 
 export const checkUser = async () => {
   const user = await currentUser();
@@ -8,30 +8,28 @@ export const checkUser = async () => {
     return null;
   }
 
-  try {
-    const loggedInUser = await db.user.findUnique({
-      where: {
-        clerkUserId: user.id,
-      },
-    });
+  const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
 
-    if (loggedInUser) {
-      return loggedInUser;
-    }
-
-    const name = `${user.firstName} ${user.lastName}`;
-
-    const newUser = await db.user.create({
-      data: {
+  const { data, error } = await supabaseServer
+    .from("users")
+    .upsert(
+      {
         clerkUserId: user.id,
         name,
         imageUrl: user.imageUrl,
         email: user.emailAddresses[0].emailAddress,
       },
-    });
+      {
+        onConflict: "clerkUserId",
+      }
+    )
+    .select()
+    .single();
 
-    return newUser;
-  } catch (error) {
-    console.log(error.message);
+  if (error) {
+    console.error("checkUser error:", error.message);
+    throw error;
   }
+
+  return data;
 };
