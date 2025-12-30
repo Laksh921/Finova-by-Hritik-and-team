@@ -13,42 +13,46 @@ const serializeTransaction = (obj) => ({
 });
 
 export async function getUserAccounts() {
-  const { userId: clerkUserId } = await auth();
-  if (!clerkUserId) throw new Error("Unauthorized");
+  try {
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) return [];
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("id")
-    .eq("clerkUserId", clerkUserId)
-    .single();
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerkUserId", clerkUserId)
+      .maybeSingle();
 
-  if (!user) {
-    throw new Error("User not found");
-  }
+    if (!user) return [];
 
-  const { data: accounts } = await supabase
-    .from("accounts")
-    .select(
+    const { data: accounts } = await supabase
+      .from("accounts")
+      .select(
+        `
+        *,
+        transactions(count)
       `
-      *,
-      transactions(count)
-    `
-    )
-    .eq("userId", user.id)
-    .order("createdAt", { ascending: false });
+      )
+      .eq("userId", user.id)
+      .order("createdAt", { ascending: false });
 
-  return accounts.map((account) => ({
-    ...account,
-    _count: {
-      transactions: account.transactions[0]?.count || 0,
-    },
-  }));
+    if (!accounts) return [];
+
+    return accounts.map((account) => ({
+      ...account,
+      _count: {
+        transactions: account.transactions?.[0]?.count || 0,
+      },
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function createAccount(data) {
   try {
     const { userId: clerkUserId } = await auth();
-    if (!clerkUserId) throw new Error("Unauthorized");
+    if (!clerkUserId) return { success: false };
 
     const req = await request();
 
@@ -58,26 +62,19 @@ export async function createAccount(data) {
     });
 
     if (decision.isDenied()) {
-      if (decision.reason.isRateLimit()) {
-        throw new Error("Too many requests. Please try again later.");
-      }
-      throw new Error("Request blocked");
+      return { success: false, error: "Too many requests. Please try again later." };
     }
 
     const { data: user } = await supabase
       .from("users")
       .select("id")
       .eq("clerkUserId", clerkUserId)
-      .single();
+      .maybeSingle();
 
-    if (!user) {
-      throw new Error("User not found");
-    }
+    if (!user) return { success: false };
 
     const balanceFloat = parseFloat(data.balance);
-    if (isNaN(balanceFloat)) {
-      throw new Error("Invalid balance amount");
-    }
+    if (isNaN(balanceFloat)) return { success: false };
 
     const { data: existingAccounts } = await supabase
       .from("accounts")
@@ -85,7 +82,9 @@ export async function createAccount(data) {
       .eq("userId", user.id);
 
     const shouldBeDefault =
-      existingAccounts.length === 0 ? true : data.isDefault;
+      !existingAccounts || existingAccounts.length === 0
+        ? true
+        : data.isDefault;
 
     if (shouldBeDefault) {
       await supabase
@@ -104,34 +103,37 @@ export async function createAccount(data) {
         isDefault: shouldBeDefault,
       })
       .select()
-      .single();
+      .maybeSingle();
 
     revalidatePath("/dashboard");
+
     return { success: true, data: account };
-  } catch (error) {
-    throw new Error(error.message);
+  } catch {
+    return { success: false };
   }
 }
 
 export async function getDashboardData() {
-  const { userId: clerkUserId } = await auth();
-  if (!clerkUserId) throw new Error("Unauthorized");
+  try {
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) return [];
 
-  const { data: user } = await supabase
-    .from("users")
-    .select("id")
-    .eq("clerkUserId", clerkUserId)
-    .single();
+    const { data: user } = await supabase
+      .from("users")
+      .select("id")
+      .eq("clerkUserId", clerkUserId)
+      .maybeSingle();
 
-  if (!user) {
-    throw new Error("User not found");
+    if (!user) return [];
+
+    const { data: transactions } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("userId", user.id)
+      .order("date", { ascending: false });
+
+    return transactions || [];
+  } catch {
+    return [];
   }
-
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("userId", user.id)
-    .order("date", { ascending: false });
-
-  return transactions;
 }

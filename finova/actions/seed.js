@@ -32,69 +32,73 @@ function getRandomAmount(min, max) {
 }
 
 function getRandomCategory(type) {
-  const categories = CATEGORIES[type];
-  const category = categories[Math.floor(Math.random() * categories.length)];
-  const amount = getRandomAmount(category.range[0], category.range[1]);
-  return { category: category.name, amount };
+  const category = CATEGORIES[type][
+    Math.floor(Math.random() * CATEGORIES[type].length)
+  ];
+  return {
+    category: category.name,
+    amount: getRandomAmount(category.range[0], category.range[1]),
+  };
 }
 
 export async function seedTransactions() {
-  try {
-    const transactions = [];
-    let totalBalance = 0;
+  const transactions = [];
+  let totalBalance = 0;
 
-    for (let i = 90; i >= 0; i--) {
-      const date = subDays(new Date(), i);
+  for (let i = 90; i >= 0; i--) {
+    const date = subDays(new Date(), i).toISOString();
+    const count = Math.floor(Math.random() * 3) + 1;
 
-      const transactionsPerDay = Math.floor(Math.random() * 3) + 1;
+    for (let j = 0; j < count; j++) {
+      const type = Math.random() < 0.4 ? "INCOME" : "EXPENSE";
+      const { category, amount } = getRandomCategory(type);
 
-      for (let j = 0; j < transactionsPerDay; j++) {
-        const type = Math.random() < 0.4 ? "INCOME" : "EXPENSE";
-        const { category, amount } = getRandomCategory(type);
+      totalBalance += type === "INCOME" ? amount : -amount;
 
-        const transaction = {
-          id: crypto.randomUUID(),
-          type,
-          amount,
-          description: `${
-            type === "INCOME" ? "Received" : "Paid for"
-          } ${category}`,
-          date: date.toISOString(),
-          category,
-          status: "COMPLETED",
-          userId: USER_ID,
-          accountId: ACCOUNT_ID,
-          createdAt: date.toISOString(),
-          updatedAt: date.toISOString(),
-        };
-
-        totalBalance += type === "INCOME" ? amount : -amount;
-        transactions.push(transaction);
-      }
+      transactions.push({
+        type,
+        amount,
+        description: `${type === "INCOME" ? "Received" : "Paid for"} ${category}`,
+        date,
+        category,
+        status: "COMPLETED",
+        userId: USER_ID,
+        accountId: ACCOUNT_ID,
+      });
     }
-
-    await supabase
-      .from("transactions")
-      .delete()
-      .eq("accountId", ACCOUNT_ID);
-
-    const batchSize = 500;
-    for (let i = 0; i < transactions.length; i += batchSize) {
-      const batch = transactions.slice(i, i + batchSize);
-      await supabase.from("transactions").insert(batch);
-    }
-
-    await supabase
-      .from("accounts")
-      .update({ balance: totalBalance })
-      .eq("id", ACCOUNT_ID);
-
-    return {
-      success: true,
-      message: `Created ${transactions.length} transactions`,
-    };
-  } catch (error) {
-    console.error("Error seeding transactions:", error);
-    return { success: false, error: error.message };
   }
+
+  const { error: deleteError } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("accountId", ACCOUNT_ID);
+
+  if (deleteError) {
+    return { success: false, error: deleteError.message };
+  }
+
+  const batchSize = 500;
+  for (let i = 0; i < transactions.length; i += batchSize) {
+    const { error } = await supabase
+      .from("transactions")
+      .insert(transactions.slice(i, i + batchSize));
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  const { error: balanceError } = await supabase
+    .from("accounts")
+    .update({ balance: totalBalance })
+    .eq("id", ACCOUNT_ID);
+
+  if (balanceError) {
+    return { success: false, error: balanceError.message };
+  }
+
+  return {
+    success: true,
+    message: `Created ${transactions.length} transactions`,
+  };
 }

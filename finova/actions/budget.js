@@ -7,35 +7,25 @@ import { revalidatePath } from "next/cache";
 export async function getCurrentBudget(accountId) {
   try {
     const { userId: clerkUserId } = await auth();
-    if (!clerkUserId) throw new Error("Unauthorized");
+    if (!clerkUserId) return { budget: null, currentExpenses: 0 };
 
     const { data: user } = await supabase
       .from("users")
       .select("id")
       .eq("clerkUserId", clerkUserId)
-      .single();
+      .maybeSingle();
 
-    if (!user) {
-      throw new Error("User not found");
-    }
+    if (!user) return { budget: null, currentExpenses: 0 };
 
     const { data: budget } = await supabase
       .from("budgets")
       .select("*")
       .eq("userId", user.id)
-      .single();
+      .maybeSingle();
 
-    const currentDate = new Date();
-    const startOfMonth = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth(),
-      1
-    );
-    const endOfMonth = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      0
-    );
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
     const { data: expenses } = await supabase
       .from("transactions")
@@ -54,30 +44,29 @@ export async function getCurrentBudget(accountId) {
       budget: budget || null,
       currentExpenses: totalExpenses,
     };
-  } catch (error) {
-    console.error("Error fetching budget:", error);
-    throw error;
+  } catch {
+    return { budget: null, currentExpenses: 0 };
   }
 }
 
 export async function updateBudget(amount) {
   try {
     const { userId: clerkUserId } = await auth();
-    if (!clerkUserId) throw new Error("Unauthorized");
+    if (!clerkUserId) return { success: false };
 
     const { data: user } = await supabase
       .from("users")
       .select("id")
       .eq("clerkUserId", clerkUserId)
-      .single();
+      .maybeSingle();
 
-    if (!user) throw new Error("User not found");
+    if (!user) return { success: false };
 
     const { data: existingBudget } = await supabase
       .from("budgets")
       .select("id")
       .eq("userId", user.id)
-      .single();
+      .maybeSingle();
 
     let budget;
 
@@ -87,7 +76,7 @@ export async function updateBudget(amount) {
         .update({ amount })
         .eq("userId", user.id)
         .select()
-        .single();
+        .maybeSingle();
       budget = data;
     } else {
       const { data } = await supabase
@@ -97,18 +86,14 @@ export async function updateBudget(amount) {
           amount,
         })
         .select()
-        .single();
+        .maybeSingle();
       budget = data;
     }
 
     revalidatePath("/dashboard");
 
-    return {
-      success: true,
-      data: budget,
-    };
-  } catch (error) {
-    console.error("Error updating budget:", error);
-    return { success: false, error: error.message };
+    return { success: true, data: budget };
+  } catch {
+    return { success: false };
   }
 }

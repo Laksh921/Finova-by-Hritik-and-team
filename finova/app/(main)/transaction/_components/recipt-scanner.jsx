@@ -14,6 +14,7 @@ export function ReceiptScanner({ onScanComplete }) {
     loading: scanReceiptLoading,
     fn: scanReceiptFn,
     data: scannedData,
+    error,
   } = useFetch(scanReceipt);
 
   const handleReceiptScan = async (file) => {
@@ -26,9 +27,13 @@ export function ReceiptScanner({ onScanComplete }) {
   };
 
   useEffect(() => {
-    if (scannedData && !scanReceiptLoading) {
+    if (!scanReceiptLoading && scannedData) {
       onScanComplete(scannedData);
       toast.success("Receipt scanned successfully");
+    }
+
+    if (!scanReceiptLoading && scannedData === null) {
+      toast.error("Could not scan receipt");
     }
   }, [scanReceiptLoading, scannedData]);
 

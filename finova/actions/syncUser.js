@@ -10,26 +10,53 @@ export async function syncUser() {
   const clerkUser = await currentUser();
   if (!clerkUser) return null;
 
-  const { data: existingUser } = await supabase
-    .from("users")
-    .select("id")
-    .eq("clerkUserId", userId)
-    .single();
+  const email = clerkUser.emailAddresses?.[0]?.emailAddress
+    ?.toLowerCase()
+    .trim();
 
-  if (existingUser) return existingUser;
+  if (!email) return null;
+
+  const { data: byClerkId } = await supabase
+    .from("users")
+    .select("*")
+    .eq("clerkUserId", userId)
+    .maybeSingle();
+
+  if (byClerkId) return byClerkId;
+
+  const { data: byEmail } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (byEmail) {
+    const { data: updatedUser } = await supabase
+      .from("users")
+      .update({
+        clerkUserId: userId,
+        name: `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim(),
+        imageUrl: clerkUser.imageUrl,
+      })
+      .eq("id", byEmail.id)
+      .select()
+      .single();
+
+    return updatedUser;
+  }
 
   const { data: newUser, error } = await supabase
     .from("users")
     .insert({
       clerkUserId: userId,
-      email: clerkUser.emailAddresses[0]?.emailAddress,
+      email,
       name: `${clerkUser.firstName ?? ""} ${clerkUser.lastName ?? ""}`.trim(),
       imageUrl: clerkUser.imageUrl,
     })
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) return null;
 
   return newUser;
 }
