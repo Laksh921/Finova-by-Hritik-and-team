@@ -27,15 +27,26 @@ export function ReceiptScanner({ onScanComplete }) {
   };
 
   useEffect(() => {
+    // ✅ SUCCESS
     if (!scanReceiptLoading && scannedData) {
       onScanComplete(scannedData);
       toast.success("Receipt scanned successfully");
     }
 
-    if (!scanReceiptLoading && scannedData === null) {
-      toast.error("Could not scan receipt");
+    // ❌ SCAN FAILED (but request succeeded)
+    if (!scanReceiptLoading && scannedData === null && !error) {
+      toast.error(
+        "There was an error scanning your receipt. Please try again."
+      );
     }
-  }, [scanReceiptLoading, scannedData]);
+
+    // 💥 SERVER / ACTION ERROR
+    if (!scanReceiptLoading && error) {
+      toast.error(
+        "There was an error scanning your receipt. Please try again."
+      );
+    }
+  }, [scanReceiptLoading, scannedData, error, onScanComplete]);
 
   return (
     <div className="flex items-center gap-4">
@@ -50,6 +61,7 @@ export function ReceiptScanner({ onScanComplete }) {
           if (file) handleReceiptScan(file);
         }}
       />
+
       <Button
         type="button"
         variant="outline"
