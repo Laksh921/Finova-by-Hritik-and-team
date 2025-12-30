@@ -6,11 +6,12 @@ export const checkUser = async () => {
   if (!user) return null;
 
   const clerkUserId = user.id;
-  const email = user.emailAddresses[0].emailAddress.toLowerCase().trim();
+  const email = user.emailAddresses?.[0]?.emailAddress?.toLowerCase().trim();
+  if (!email) return null;
+
   const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
   const imageUrl = user.imageUrl;
 
-  // 1️⃣ Try finding user by clerkUserId
   const { data: byClerkId } = await supabaseServer
     .from("users")
     .select("*")
@@ -19,7 +20,6 @@ export const checkUser = async () => {
 
   if (byClerkId) return byClerkId;
 
-  // 2️⃣ Try finding user by email
   const { data: byEmail } = await supabaseServer
     .from("users")
     .select("*")
@@ -27,8 +27,7 @@ export const checkUser = async () => {
     .maybeSingle();
 
   if (byEmail) {
-    // 🔁 Attach clerkUserId to existing email record
-    const { data: updatedUser, error } = await supabaseServer
+    const { data: updatedUser } = await supabaseServer
       .from("users")
       .update({
         clerkUserId,
@@ -39,12 +38,10 @@ export const checkUser = async () => {
       .select()
       .single();
 
-    if (error) throw error;
     return updatedUser;
   }
 
-  // 3️⃣ Truly new user → insert
-  const { data: newUser, error } = await supabaseServer
+  const { data: newUser } = await supabaseServer
     .from("users")
     .insert({
       clerkUserId,
@@ -54,8 +51,6 @@ export const checkUser = async () => {
     })
     .select()
     .single();
-
-  if (error) throw error;
 
   return newUser;
 };
