@@ -2,39 +2,58 @@ import { currentUser } from "@clerk/nextjs/server";
 import { supabaseServer } from "@/lib/supabase-server";
 
 export const checkUser = async () => {
-  const user = await currentUser();
-  if (!user) return null;
+  try {
+    const user = await currentUser();
+    if (!user) return null;
 
-  const clerkUserId = user.id;
-  const email = user.emailAddresses?.[0]?.emailAddress
-    ?.toLowerCase()
-    .trim();
+    const clerkUserId = user.id;
 
-  if (!email) return null;
+    const email = user.emailAddresses?.[0]?.emailAddress
+      ?.toLowerCase()
+      .trim();
 
-  const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
-  const imageUrl = user.imageUrl;
+    if (!email) return null;
 
-  const { data, error } = await supabaseServer
-    .from("users")
-    .upsert(
-      {
-        clerkUserId,
-        email,
-        name,
-        imageUrl,
-      },
-      {
-        onConflict: "clerkUserId",
-      }
-    )
-    .select()
-    .single();
+    const name =
+      `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() || null;
 
-  if (error) {
-    console.error("checkUser error:", error);
-    return null;
+    const imageUrl = user.imageUrl ?? null;
+
+    // 🔹 STEP 1: Upsert (do NOT expect return value)
+    const { error: upsertError } = await supabaseServer
+      .from("users")
+      .upsert(
+        {
+          clerkUserId,
+          email,
+          name,
+          imageUrl,
+        },
+        {
+          onConflict: "clerkUserId",
+        }
+      );
+
+    if (upsertError) {
+      console.error("Supabase upsert error:", upsertError);
+      return null;
+    }
+
+    // 🔹 STEP 2: Fetch safely (NO `.single()`)
+    const { data, error: fetchError } = await supabaseServer
+      .from("users")
+      .select("*")
+      .eq("clerkUserId", clerkUserId)
+      .limit(1);
+
+    if (fetchError) {
+      console.error("Supabase fetch error:", fetchError);
+      return null;
+    }
+
+    return data?.[0] ?? null;
+  } catch (err) {
+    console.error("checkUser fatal error:", err);
+    return null; 
   }
-
-  return data;
 };
