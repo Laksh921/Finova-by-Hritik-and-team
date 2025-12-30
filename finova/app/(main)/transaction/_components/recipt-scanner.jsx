@@ -36,14 +36,14 @@ export function ReceiptScanner({ onScanComplete }) {
     // ❌ SCAN FAILED (but request succeeded)
     if (!scanReceiptLoading && scannedData === null && !error) {
       toast.error(
-        "There was an error scanning your receipt. Please try again."
+        "Reciept scanning failed. Please ensure the image is clear and try again."
       );
     }
 
     // 💥 SERVER / ACTION ERROR
     if (!scanReceiptLoading && error) {
       toast.error(
-        "There was an error scanning your receipt. Please try again."
+        "Reciept scanning failed. Please ensure the image is clear and try again."
       );
     }
   }, [scanReceiptLoading, scannedData, error, onScanComplete]);
