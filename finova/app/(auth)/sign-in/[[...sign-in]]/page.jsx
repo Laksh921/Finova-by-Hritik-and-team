@@ -1,14 +1,8 @@
-import { currentUser } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
+import { SignIn } from '@clerk/nextjs';
+import React from 'react';
 
-export default async function Page() {
-  const user = await currentUser();
-  if (user) redirect("/dashboard");
-
-  return (
-    <SignIn
-      afterSignInUrl="/dashboard"
-      afterSignUpUrl="/dashboard"
-    />
-  );
+const Page = () => {
+  return <SignIn afterSignInUrl="/dashboard" />;
 }
+
+export default Page
